@@ -1,172 +1,172 @@
 package com.example.discordwebapp
 
-import android.app.Activity
-import android.content.ActivityNotFoundException
-import android.content.ComponentName
-import android.content.Intent
-import android.content.pm.ApplicationInfo
-import android.graphics.Color
-import android.net.Uri
+import android.annotation.SuppressLint
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.content.SharedPreferences
+import android.os.Build
 import android.os.Bundle
-import android.webkit.WebResourceRequest
+import android.webkit.JavascriptInterface
+import android.webkit.PermissionRequest
+import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.browser.customtabs.CustomTabsClient
-import androidx.browser.customtabs.CustomTabsIntent
-import androidx.browser.customtabs.CustomTabsServiceConnection
-import androidx.browser.customtabs.CustomTabsSession
-import org.json.JSONObject
+import android.widget.EditText
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.NotificationCompat
 
-class MainActivity : Activity() {
+class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private var pageReady = false
-    private var pendingCallback: String? = null
+    private lateinit var sharedPreferences: SharedPreferences
 
-    // Custom Tabs pre-warming: binding the service early and requesting a session
-    // lets Chrome start spinning up before the user even taps "Log in", and
-    // mayLaunchUrl() below starts loading discord.com before the tab is shown.
-    private var ctSession: CustomTabsSession? = null
-    private var ctConnection: CustomTabsServiceConnection? = null
-
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        bindCustomTabsService()
 
-        webView = WebView(this)
+        sharedPreferences = getSharedPreferences("DiscordPrefs", Context.MODE_PRIVATE)
+
+        webView = WebView(this).apply {
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                loadsImagesAutomatically = true
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                setUserAgentString("Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+            }
+
+            addJavascriptInterface(WebAppInterface(this@MainActivity), "AndroidBridge")
+
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    if (url != null && (url.contains("discord.com") || url.contains("discordapp.com"))) {
+                        injectTokenAndSetupListeners(view)
+                    }
+                }
+            }
+
+            webChromeClient = object : WebChromeClient() {
+                override fun onPermissionRequest(request: PermissionRequest?) {
+                    request?.grant(request.resources)
+                }
+            }
+        }
+
         setContentView(webView)
 
-        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
-            WebView.setWebContentsDebuggingEnabled(true)
+        val savedToken = sharedPreferences.getString("discord_token", null)
+        if (savedToken.isNullOrEmpty()) {
+            promptForToken()
+        } else {
+            loadDiscord(savedToken)
         }
+    }
 
-        webView.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true          // localStorage ("Keep me logged in")
-            allowFileAccess = true            // needed for file:///android_asset
-            allowContentAccess = false
-            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+    private fun promptForToken() {
+        val input = EditText(this).apply {
+            hint = "Paste your Discord User Token here"
         }
+        AlertDialog.Builder(this)
+            .setTitle("Discord Login Token")
+            .setMessage("Enter your Discord account token for instant login and messaging:")
+            .setView(input)
+            .setCancelable(false)
+            .setPositiveButton("Save & Login") { _, _ ->
+                val token = input.text.toString().trim()
+                if (token.isNotEmpty()) {
+                    sharedPreferences.edit().putString("discord_token", token).apply()
+                    loadDiscord(token)
+                } else {
+                    promptForToken()
+                }
+            }
+            .setNegativeButton("Exit") { _, _ -> finish() }
+            .show()
+    }
 
-        webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-                routeUrl(request.url)
+    private fun loadDiscord(token: String) {
+        val initialHtml = """
+            <html>
+            <head>
+                <script>
+                    localStorage.setItem('token', '"$token"');
+                    window.location.href = 'https://discord.com/app';
+                </script>
+            </head>
+            <body>Loading Discord...</body>
+            </html>
+        """
+        webView.loadDataWithBaseURL("https://discord.com", initialHtml, "text/html", "UTF-8", "https://discord.com")
+    }
 
-            override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
-                pageReady = false
+    private fun injectTokenAndSetupListeners(view: WebView?) {
+        val token = sharedPreferences.getString("discord_token", "")
+        val js = """
+            (function() {
+                const token = "$token";
+                if (token && localStorage.getItem('token') !== '"' + token + '"' && localStorage.getItem('token') !== token) {
+                    localStorage.setItem('token', '"' + token + '"');
+                }
+                
+                // Monitor DOM for new incoming messages to trigger native notifications
+                if (!window._notificationObserverInitialized) {
+                    window._notificationObserverInitialized = true;
+                    const observer = new MutationObserver((mutations) => {
+                        const messages = document.querySelectorAll('[id^="chat-messages-"]');
+                        if (messages.length > 0) {
+                            const latest = messages[messages.length - 1];
+                            const text = latest.innerText;
+                            if (text && window._lastNotified !== text) {
+                                window._lastNotified = text;
+                                try {
+                                    AndroidBridge.sendNotification("Discord", text.substring(0, 100));
+                                } catch(e) {}
+                            }
+                        }
+                    });
+                    observer.observe(document.body, { childList: true, subtree: true });
+                }
+            })();
+        """
+        view?.evaluateJavascript(js, null)
+    }
+
+    class WebAppInterface(private val context: Context) {
+        @JavascriptInterface
+        fun sendNotification(title: String, message: String) {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channelId = "discord_notifications"
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(channelId, "Discord Messages", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Notifications for incoming Discord messages"
+                }
+                notificationManager.createNotificationChannel(channel)
             }
 
-            override fun onPageFinished(view: WebView, url: String?) {
-                pageReady = true
-                flushPendingCallback()
-            }
-        }
-
-        webView.loadUrl("file:///android_asset/index.html")
-
-        // Cold start via the redirect (process was killed while the browser was open)
-        handleIntent(intent)
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        handleIntent(intent)
-    }
-
-    /** Decides what stays in the WebView and what goes to the system browser. */
-    private fun routeUrl(uri: Uri): Boolean {
-        val scheme = uri.scheme ?: return false
-        val host = uri.host.orEmpty()
-
-        return when {
-            // Local app content stays in the WebView
-            scheme == "file" -> false
-
-            // Redirect arrived inside the WebView (rare) -> treat like the intent
-            scheme == "discordwebapp" -> { deliverCallback(uri); true }
-
-            // Discord blocks embedded WebViews (disallowed_useragent): use Custom Tabs
-            (scheme == "https" || scheme == "http") &&
-                (host == "discord.com" || host.endsWith(".discord.com")) &&
-                uri.path.orEmpty().contains("/oauth2/authorize") -> { prewarm(uri); openExternally(uri); true }
-
-            // Any other web link: open in the browser, never navigate the app away
-            scheme == "https" || scheme == "http" -> { openExternally(uri); true }
-
-            else -> true
-        }
-    }
-
-    private fun openExternally(uri: Uri) {
-        try {
-            CustomTabsIntent.Builder(ctSession)
-                .setShowTitle(true)
-                .setToolbarColor(Color.parseColor("#14151A")) // matches the app's background
-                .setNavigationBarColor(Color.parseColor("#14151A"))
-                .setStartAnimations(this, android.R.anim.slide_in_left, android.R.anim.fade_out)
-                .setExitAnimations(this, android.R.anim.fade_in, android.R.anim.slide_out_right)
+            val notification = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(android.R.drawable.ic_dialog_email)
+                .setContentTitle(title)
+                .setContentText(message)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
                 .build()
-                .launchUrl(this, uri)
-        } catch (e: ActivityNotFoundException) {
-            try {
-                startActivity(Intent(Intent.ACTION_VIEW, uri))
-            } catch (_: ActivityNotFoundException) { /* no browser installed */ }
+
+            notificationManager.notify((System.currentTimeMillis() % 10000).toInt(), notification)
         }
     }
 
-    /** Binds Chrome's Custom Tabs service so the tab is ready to open instantly. */
-    private fun bindCustomTabsService() {
-        val packageName = "com.android.chrome" // falls back silently if not installed
-        ctConnection = object : CustomTabsServiceConnection() {
-            override fun onCustomTabsServiceConnected(name: ComponentName, client: CustomTabsClient) {
-                client.warmup(0L)
-                ctSession = client.newSession(null)
-            }
-            override fun onServiceDisconnected(name: ComponentName) { ctSession = null }
-        }
-        try {
-            CustomTabsClient.bindCustomTabsService(this, packageName, ctConnection as CustomTabsServiceConnection)
-        } catch (_: SecurityException) { /* Chrome not installed: openExternally() falls back fine */ }
-    }
-
-    /** Called right when the user taps "Log in", before the tab is shown, to start the page loading early. */
-    private fun prewarm(uri: Uri) {
-        ctSession?.mayLaunchUrl(uri, null, null)
-    }
-
-    private fun handleIntent(intent: Intent?) {
-        val data = intent?.data ?: return
-        if (data.scheme == "discordwebapp" && data.host == "callback") {
-            deliverCallback(data)
-            intent.data = null // don't re-deliver on re-create
-        }
-    }
-
-    /** The authorization code (and state) arrive in the query string; an error, if any, may arrive in either. */
-    private fun deliverCallback(uri: Uri) {
-        val payload = uri.query ?: uri.fragment ?: return
-        pendingCallback = payload
-        if (pageReady) flushPendingCallback()
-    }
-
-    private fun flushPendingCallback() {
-        val payload = pendingCallback ?: return
-        pendingCallback = null
-        val js = "if (window.handleOAuthCallback) { window.handleOAuthCallback(${JSONObject.quote("?$payload")}); }"
-        webView.evaluateJavascript(js, null)
-    }
-
-    @Suppress("OVERRIDE_DEPRECATION", "DEPRECATION")
+    @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
-    }
-
-    override fun onDestroy() {
-        webView.destroy()
-        ctConnection?.let { unbindService(it) }
-        ctConnection = null
-        super.onDestroy()
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            super.onBackPressed()
+        }
     }
 }
