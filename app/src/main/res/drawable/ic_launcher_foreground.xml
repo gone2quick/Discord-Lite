@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Original mark for this app: a rounded chat bubble with a small spark,
+  standing for "quick messaging". Intentionally not Discord's logo/mark —
+  Discord's brand assets are trademarked and this app is an independent
+  client, not an official Discord product.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#7C8CFF"
+        android:pathData="M29,43
+                           A14,14 0 0 1 43,29
+                           L65,29
+                           A14,14 0 0 1 79,43
+                           L79,55
+                           A14,14 0 0 1 65,69
+                           L46,69
+                           L34,80
+                           L37,69
+                           L43,69
+                           A14,14 0 0 1 29,55
+                           Z" />
+    <path
+        android:fillColor="#1D1F27"
+        android:pathData="M58,34 L47,52 L53,52 L51,64 L64,45 L56,45 Z" />
+</vector>

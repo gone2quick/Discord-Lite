@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.DiscordWebApp" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#14151A</item>
+        <item name="android:statusBarColor">#14151A</item>
+        <item name="android:navigationBarColor">#14151A</item>
+    </style>
+</resources>
