@@ -44,14 +44,19 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun apiRequest(method: String, urlString: String, token: String, jsonBody: String): String {
             return try {
+                // Clean any accidental quotes or whitespace out of the token
+                val cleanToken = token.trim().replace("\"", "").replace("'", "")
+
                 val url = URL(urlString)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = method
-                conn.setRequestProperty("Authorization", token)
+                
+                // USER TOKENS MUST BE PASSED RAW WITHOUT "Bearer" OR "Bot" PREFIXES
+                conn.setRequestProperty("Authorization", cleanToken)
                 conn.setRequestProperty("Content-Type", "application/json")
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 8.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
-                conn.connectTimeout = 8000
-                conn.readTimeout = 8000
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
 
                 if (jsonBody.isNotEmpty() && (method == "POST" || method == "PATCH" || method == "PUT")) {
                     conn.doOutput = true
@@ -63,13 +68,18 @@ class MainActivity : AppCompatActivity() {
                 val responseText = BufferedReader(InputStreamReader(stream)).use { it.readText() }
 
                 if (code !in 200..299) {
-                    """{"error": "HTTP $code", "details": $responseText}"""
+                    """{"error": "HTTP $code", "details": ${JSONObjectQuote(responseText)}}"""
                 } else {
                     responseText.ifEmpty { "{}" }
                 }
             } catch (e: Exception) {
                 """{"error": "${e.message?.replace("\"", "'")}"}"""
             }
+        }
+
+        private fun JSONObjectQuote(text: String): String {
+            val safe = text.replace("\"", "\\\"").replace("\n", " ")
+            return "\"$safe\""
         }
 
         @JavascriptInterface
@@ -103,7 +113,7 @@ class MainActivity : AppCompatActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        val drawerJs = "document.getElementById('drawer').classList.toggle('closed');"
+        val drawerJs = "if(typeof toggleDrawer === 'function') { toggleDrawer(); } else { document.getElementById('drawer').classList.toggle('closed'); }"
         webView.evaluateJavascript(drawerJs, null)
     }
 }
