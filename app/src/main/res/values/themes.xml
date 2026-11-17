@@ -1,7 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.DiscordWebApp" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">#14151A</item>
-        <item name="android:statusBarColor">#14151A</item>
-        <item name="android:navigationBarColor">#14151A</item>
+    <style name="Theme.DiscordWebapp" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <!-- Customize your theme here if needed -->
+        <item name="colorPrimary">#5865F2</item>
+        <item name="colorPrimaryDark">#4752C4</item>
+        <item name="colorAccent">#5865F2</item>
     </style>
 </resources>
