@@ -1,525 +1,354 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="dark">
-<title>Discord Lite</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>LiteCord</title>
 <style>
-  :root {
-    --ink: #14151a;
-    --panel: #1d1f27;
-    --line: #2c2f3a;
-    --text: #e8e9ee;
-    --muted: #9a9eae;
-    --accent: #7c8cff;
-    --accent-ink: #0d1030;
-    --danger: #ff7a85;
-    --ok: #5fd39a;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--ink); color: var(--text); }
-  body {
-    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
-             max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
-  }
-  main { max-width: 560px; margin: 0 auto; display: grid; gap: 16px; }
-  h1 { font-size: 1.5rem; margin: 8px 0 0; letter-spacing: -0.01em; }
-  h2 { font-size: 1rem; margin: 0 0 12px; }
-  p { margin: 0; }
-  .muted { color: var(--muted); font-size: 0.9rem; }
-  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-  label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; }
-  input[type=text] {
-    width: 100%; padding: 10px 12px; font: inherit; color: var(--text);
-    background: var(--ink); border: 1px solid var(--line); border-radius: 8px;
-  }
-  input[type=text]:focus-visible, button:focus-visible, .switch input:focus-visible + .track {
-    outline: 2px solid var(--accent); outline-offset: 2px;
-  }
-  .field + .field { margin-top: 12px; }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  button {
-    font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer;
-  }
-  .primary { background: var(--accent); color: var(--accent-ink); width: 100%; padding: 12px 16px; }
-  .ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 500; }
-  .linkish { background: none; color: var(--accent); padding: 0; font-weight: 500; font-size: 0.85rem; }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { background: #313338; color: #dbdee1; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  
+  /* Login Screen */
+  #login-screen { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; padding: 20px; background: #1e1f22; }
+  #login-screen h2 { color: #fff; margin-bottom: 8px; }
+  #login-screen p { color: #949ba4; font-size: 13px; margin-bottom: 16px; text-align: center; }
+  #token-input { width: 100%; max-width: 340px; padding: 12px; border-radius: 6px; border: 1px solid #111214; background: #313338; color: #fff; margin-bottom: 12px; font-size: 14px; }
+  .btn { background: #5865f2; color: #fff; border: none; padding: 12px 20px; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer; width: 100%; max-width: 340px; }
+  .btn:active { background: #4752c4; }
 
-  .switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
-  .switch input { position: absolute; opacity: 0; }
-  .track { width: 44px; height: 26px; border-radius: 13px; background: var(--line); position: relative; flex: none; transition: background .15s; }
-  .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--text); transition: transform .15s; }
-  .switch input:checked + .track { background: var(--accent); }
-  .switch input:checked + .track::after { transform: translateX(18px); background: var(--accent-ink); }
+  /* Main App Layout */
+  #app { display: none; height: 100%; flex-direction: column; }
+  #topbar { height: 48px; background: #2b2d31; border-bottom: 1px solid #1f2023; display: flex; align-items: center; padding: 0 12px; justify-content: space-between; flex-shrink: 0; }
+  #menu-btn { background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 4px 8px; }
+  #channel-title { font-weight: 700; color: #fff; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 65%; }
+  #status-dot { width: 10px; height: 10px; border-radius: 50%; background: #f23f43; display: inline-block; margin-right: 6px; }
+  #logout-btn { background: #da373c; border: none; color: #fff; font-size: 11px; padding: 5px 8px; border-radius: 4px; }
 
-  #status { min-height: 1.4em; font-size: 0.9rem; }
-  #status.error { color: var(--danger); }
-  #status.ok { color: var(--ok); }
+  #workspace { display: flex; flex: 1; overflow: hidden; position: relative; }
+  
+  /* Drawer (Servers + Channels) */
+  #drawer { position: absolute; top: 0; left: 0; bottom: 0; width: 82%; max-width: 320px; background: #2b2d31; display: flex; z-index: 20; transform: translateX(0); transition: transform 0.15s ease-out; border-right: 1px solid #1f2023; }
+  #drawer.closed { transform: translateX(-100%); }
+  #guild-list { width: 64px; background: #1e1f22; overflow-y: auto; display: flex; flex-direction: column; align-items: center; padding: 8px 0; gap: 8px; flex-shrink: 0; }
+  .guild-icon { width: 46px; height: 46px; border-radius: 50%; background: #313338; color: #dbdee1; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; cursor: pointer; overflow: hidden; flex-shrink: 0; }
+  .guild-icon.active { border-radius: 14px; background: #5865f2; color: #fff; }
+  .guild-icon img { width: 100%; height: 100%; object-fit: cover; }
 
-  .profile { display: flex; align-items: center; gap: 14px; }
-  .avatar { width: 64px; height: 64px; border-radius: 50%; background: var(--line); flex: none; object-fit: cover; }
-  .profile strong { display: block; font-size: 1.1rem; }
+  #channel-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .channel-header { font-size: 11px; font-weight: 700; color: #949ba4; text-transform: uppercase; margin: 10px 4px 4px; }
+  .channel-item { padding: 8px 10px; border-radius: 4px; color: #949ba4; font-size: 14px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .channel-item:hover, .channel-item.active { background: #3f4248; color: #fff; }
 
-  ul.guilds { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-  ul.guilds li { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
-  ul.guilds li:first-child { border-top: 0; }
-  .gicon { width: 40px; height: 40px; border-radius: 12px; background: var(--line); flex: none; object-fit: cover;
-           display: grid; place-items: center; font-weight: 700; color: var(--muted); font-size: 0.85rem; }
-  .gname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-  .badge { font-size: 0.75rem; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 0 8px; flex: none; }
-  [hidden] { display: none !important; }
-  @media (prefers-reduced-motion: reduce) { .track, .track::after { transition: none; } }
+  /* Chat Area */
+  #chat-container { flex: 1; display: flex; flex-direction: column; width: 100%; background: #313338; }
+  #messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { display: flex; flex-direction: column; word-wrap: break-word; }
+  .msg-header { display: flex; align-items: baseline; gap: 6px; }
+  .msg-author { font-weight: 600; color: #fff; font-size: 14px; }
+  .msg-time { font-size: 11px; color: #949ba4; }
+  .msg-content { font-size: 14px; color: #dbdee1; line-height: 1.35; margin-top: 2px; white-space: pre-wrap; }
+  .msg-attachment { color: #00a8fc; font-size: 12px; margin-top: 3px; text-decoration: underline; }
+
+  /* Input Bar */
+  #input-bar { display: flex; padding: 8px; background: #2b2d31; gap: 8px; flex-shrink: 0; }
+  #msg-input { flex: 1; background: #383a40; border: none; border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 14px; outline: none; }
+  #send-btn { background: #5865f2; border: none; color: #fff; border-radius: 8px; padding: 0 16px; font-weight: 600; font-size: 14px; }
 </style>
 </head>
 <body>
-<main>
-  <h1>Discord Lite</h1>
 
-  <!-- Signed-out view -->
-  <section id="loginView">
-    <div class="field">
-      <label class="switch" for="keepLoggedIn">
-        <span>Keep me logged in</span>
-        <input id="keepLoggedIn" type="checkbox">
-        <span class="track" aria-hidden="true"></span>
-      </label>
-    </div>
-    <div class="field">
-      <button class="primary" id="loginBtn" type="button">Log in with Discord</button>
-    </div>
-    <!--
-      Developers: for local testing in a desktop browser (not the packaged app),
-      you can override the Client ID / Redirect URI without touching the code
-      by opening this page as index.html?clientId=...&redirectUri=...
-      Neither field is ever shown to end users of the packaged app.
-    -->
-  </section>
+<div id="login-screen">
+  <h2>LiteCord</h2>
+  <p>Zero-bloat native-speed Discord client. Enter your user token to connect directly to Discord's API.</p>
+  <input type="password" id="token-input" placeholder="Paste Discord Token">
+  <button class="btn" onclick="saveToken()">Connect</button>
+</div>
 
-  <p id="status" role="status" aria-live="polite"></p>
-
-  <!-- Signed-in view -->
-  <div id="appView" hidden style="display:grid;gap:16px">
-    <section>
-      <div class="profile">
-        <img id="avatar" class="avatar" alt="">
-        <div>
-          <strong id="userName"></strong>
-          <span class="muted" id="userId"></span>
-        </div>
-      </div>
-      <div class="row" style="margin-top:14px">
-        <span class="muted" id="expiry"></span>
-        <span style="display:flex;gap:8px">
-          <button class="ghost" id="refreshBtn" type="button">Refresh</button>
-          <button class="ghost" id="logoutBtn" type="button">Log out</button>
-        </span>
-      </div>
-      <div class="field" style="margin-top:14px">
-        <label class="switch" for="keepLoggedIn2">
-          <span>Keep me logged in</span>
-          <input id="keepLoggedIn2" type="checkbox">
-          <span class="track" aria-hidden="true"></span>
-        </label>
-      </div>
-    </section>
-
-    <section>
-      <h2>Servers <span class="muted" id="guildCount"></span></h2>
-      <ul class="guilds" id="guilds"></ul>
-    </section>
+<div id="app">
+  <div id="topbar">
+    <button id="menu-btn" onclick="toggleDrawer()">☰</button>
+    <div id="channel-title"><span id="status-dot"></span><span id="active-name">Select Channel</span></div>
+    <button id="logout-btn" onclick="logout()">Logout</button>
   </div>
-</main>
+
+  <div id="workspace">
+    <div id="drawer">
+      <div id="guild-list"></div>
+      <div id="channel-list"></div>
+    </div>
+
+    <div id="chat-container" onclick="closeDrawerOnMobile()">
+      <div id="messages"></div>
+      <form id="input-bar" onsubmit="sendMessage(event)">
+        <input type="text" id="msg-input" placeholder="Message..." autocomplete="off">
+        <button type="submit" id="send-btn">Send</button>
+      </form>
+    </div>
+  </div>
+</div>
 
 <script>
-(() => {
-  'use strict';
+  let TOKEN = localStorage.getItem('discord_token') || '';
+  let CURRENT_USER = null;
+  let ACTIVE_CHANNEL_ID = null;
+  let ws = null;
+  let heartbeatTimer = null;
+  let seq = null;
+  let channelCache = {};
 
-  // ---------- Config ----------
-  // Set this once, at build time, to your app's Discord Application ID
-  // (Discord Developer Portal → your app → General Information → Application ID).
-  // End users never see or enter this value.
-  //
-  // This app also requires "Public Client" to be enabled on the OAuth2 tab of
-  // that same Discord application. That tells Discord's token endpoint this is
-  // an installed app with no server to hold a secret, so it will exchange an
-  // authorization code for a token using PKCE alone (see login()/exchangeCode
-  // below) instead of requiring a client_secret, which could never be stored
-  // safely inside an APK anyway.
-  const CLIENT_ID = '1572384261779095664';
-  const APP_SCHEME_REDIRECT = 'discordwebapp://callback';
-  const API = 'https://discord.com/api/v10';
-  const AUTHORIZE_URL = 'https://discord.com/oauth2/authorize';
-  const TOKEN_URL = API + '/oauth2/token';
-  const SCOPES = 'identify guilds';
-  const K = {
-    keep:    'dwa.keepLoggedIn',   // '1' | '0'
-    session: 'dwa.session',        // { access_token, refresh_token, token_type, scope, expires_at, user, guilds }
-    pkce:    'dwa.pendingAuth'     // { state, verifier } — short-lived, cleared right after the token exchange
-  };
-
-  // ---------- Safe storage ----------
-  const store = {
-    get(k)    { try { return localStorage.getItem(k); } catch { return null; } },
-    set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } },
-    del(k)    { try { localStorage.removeItem(k); } catch {} },
-    getJSON(k) { try { return JSON.parse(store.get(k)); } catch { return null; } }
-  };
-
-  const $ = id => document.getElementById(id);
-  let session = null;          // in-memory session (always set while logged in)
-  let expiryTimer = null;
-
-  // ---------- Environment / redirect URI ----------
-  function isInApp() {
-    return location.protocol === 'file:' ||
-           /; wv\)/.test(navigator.userAgent) ||
-           !!window.NativeBridge;
-  }
-  function defaultRedirect() {
-    return isInApp() ? APP_SCHEME_REDIRECT : location.origin + location.pathname;
-  }
-  // Desktop-browser testing only: ?clientId=...&redirectUri=... lets a developer
-  // try the flow without rebuilding the app. Ignored entirely inside the packaged
-  // app (file:// pages keep their querystring across reloads, so this would leak
-  // a stale value into a real build otherwise).
-  function devOverrides() {
-    if (isInApp()) return {};
-    const q = new URLSearchParams(location.search);
-    return { clientId: q.get('clientId') || '', redirectUri: q.get('redirectUri') || '' };
-  }
-  function resolveClientId() {
-    return CLIENT_ID || devOverrides().clientId || '';
-  }
-  /** Never sends file:// (or an empty value) to Discord. */
-  function resolveRedirect() {
-    const override = devOverrides().redirectUri;
-    if (override && !/^file:/i.test(override)) return override;
-    return defaultRedirect();
+  if (TOKEN) {
+    initApp();
   }
 
-  // ---------- Status ----------
-  function setStatus(msg, kind) {
-    const el = $('status');
-    el.textContent = msg || '';
-    el.className = kind || '';
+  function saveToken() {
+    const val = document.getElementById('token-input').value.trim().replace(/^"|"$/g, '');
+    if (!val) return;
+    TOKEN = val;
+    localStorage.setItem('discord_token', TOKEN);
+    initApp();
   }
 
-  // ---------- "Keep me logged in" ----------
-  const keepOn = () => store.get(K.keep) === '1';
-  function setKeep(on) {
-    store.set(K.keep, on ? '1' : '0');
-    $('keepLoggedIn').checked = $('keepLoggedIn2').checked = on;
-    if (on) persistSession(); else store.del(K.session);
-  }
-  function persistSession() {
-    if (keepOn() && session) store.set(K.session, JSON.stringify(session));
+  function logout() {
+    localStorage.removeItem('discord_token');
+    if (ws) ws.close();
+    location.reload();
   }
 
-  // ---------- PKCE helpers ----------
-  // A fresh, random code_verifier is generated for every login attempt and never
-  // leaves this device. Only its SHA-256 hash (the code_challenge) is sent to
-  // Discord up front; the verifier itself is sent once, directly over HTTPS to
-  // Discord's token endpoint, to prove this app is the same one that started the
-  // login. That binding is what stops a leaked/intercepted authorization code
-  // from being redeemed by anything other than this running app.
-  function base64url(bytes) {
-    let bin = '';
-    bytes.forEach(b => { bin += String.fromCharCode(b); });
-    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  }
-  function randomToken(len) {
-    const a = new Uint8Array(len);
-    crypto.getRandomValues(a);
-    return base64url(a);
-  }
-  async function codeChallengeFor(verifier) {
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-    return base64url(new Uint8Array(digest));
+  function toggleDrawer() {
+    document.getElementById('drawer').classList.toggle('closed');
   }
 
-  // ---------- OAuth: start ----------
-  async function login() {
-    const clientId = resolveClientId();
-    if (!/^\d{15,25}$/.test(clientId)) {
-      // This means the app wasn't built with a Client ID — a developer setup
-      // issue, not something an end user can fix.
-      setStatus('This app is not configured yet. Set CLIENT_ID in index.html.', 'error');
-      return;
+  function closeDrawerOnMobile() {
+    if (ACTIVE_CHANNEL_ID) {
+      document.getElementById('drawer').classList.add('closed');
     }
-    const state = randomToken(16);
-    const verifier = randomToken(32);
-    const challenge = await codeChallengeFor(verifier);
-    store.set(K.pkce, JSON.stringify({ state, verifier }));
+  }
 
-    const params = new URLSearchParams({
-      client_id: clientId,
-      redirect_uri: resolveRedirect(),
-      response_type: 'code',
-      scope: SCOPES,
-      state,
-      code_challenge: challenge,
-      code_challenge_method: 'S256'
+  // Native Android HTTP bridge to bypass WebView CORS restrictions
+  function discordApi(method, endpoint, bodyObj = null) {
+    return new Promise((resolve, reject) => {
+      try {
+        const bodyStr = bodyObj ? JSON.stringify(bodyObj) : "";
+        const rawRes = AndroidBridge.apiRequest(method, "https://discord.com/api/v10" + endpoint, TOKEN, bodyStr);
+        const parsed = JSON.parse(rawRes);
+        if (parsed.error) reject(parsed.error);
+        else resolve(parsed);
+      } catch (e) {
+        reject(e);
+      }
     });
-    setStatus('Opening Discord\u2026');
-    // In the Android wrapper this navigation is intercepted and opened in a Custom Tab.
-    location.href = AUTHORIZE_URL + '?' + params.toString();
   }
 
-  // ---------- OAuth: callback (called by native wrapper OR by browser load) ----------
-  // The authorization code grant redirects with ?code=...&state=... (query string,
-  // not a URL fragment) — the callback payload is parsed as either, so this also
-  // tolerates an error arriving in the fragment.
-  window.handleOAuthCallback = async function handleOAuthCallback(raw) {
-    const s = String(raw || '');
-    const qIdx = s.indexOf('?'), hIdx = s.indexOf('#');
-    const merged = new URLSearchParams();
-    if (qIdx >= 0) new URLSearchParams(s.slice(qIdx + 1, hIdx >= 0 ? hIdx : undefined)).forEach((v, k) => merged.set(k, v));
-    if (hIdx >= 0) new URLSearchParams(s.slice(hIdx + 1)).forEach((v, k) => merged.set(k, v));
-    const p = merged;
+  async function initApp() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
 
-    if (p.get('error')) {
-      store.del(K.pkce);
-      setStatus('Discord login failed: ' + (p.get('error_description') || p.get('error')), 'error');
-      return;
-    }
-    const code = p.get('code');
-    if (!code) { setStatus('No authorization code in the response.', 'error'); return; }
-
-    const pending = store.getJSON(K.pkce);
-    store.del(K.pkce); // one-time use regardless of outcome
-    if (!pending || !pending.state || pending.state !== p.get('state')) {
-      setStatus('Login response did not match this request. Please try again.', 'error');
-      return;
-    }
-
-    setStatus('Finishing sign-in\u2026');
     try {
-      await exchangeCodeForToken(code, pending.verifier);
-      setStatus('Signed in. Loading your data\u2026');
-      await loadData();
-    } catch (err) {
-      setStatus(err.message || 'Could not complete sign-in.', 'error');
+      CURRENT_USER = await discordApi('GET', '/users/@me');
+      connectGateway();
+      await loadGuildsAndDMs();
+    } catch (e) {
+      alert("Login failed. Check your token.");
+      logout();
     }
-  };
-
-  /**
-   * Trades a one-time authorization code for a token, directly over HTTPS to
-   * Discord — the code is useless to anyone else without the matching
-   * code_verifier, which never left this device and is sent only on this one
-   * request. No client_secret is used or needed (Public Client + PKCE).
-   */
-  async function exchangeCodeForToken(code, verifier) {
-    const body = new URLSearchParams({
-      client_id: resolveClientId(),
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: resolveRedirect(),
-      code_verifier: verifier
-    });
-    const res = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(json.error_description || json.error || ('Token exchange failed (' + res.status + ')'));
-    }
-    applyTokenResponse(json);
   }
 
-  function applyTokenResponse(json) {
-    session = {
-      access_token: json.access_token,
-      refresh_token: json.refresh_token || (session && session.refresh_token) || null,
-      token_type: json.token_type || 'Bearer',
-      scope: json.scope || SCOPES,
-      expires_at: Date.now() + (parseInt(json.expires_in, 10) || 0) * 1000,
-      user: session ? session.user : null,
-      guilds: session ? session.guilds : null
+  async function loadGuildsAndDMs() {
+    const guildList = document.getElementById('guild-list');
+    guildList.innerHTML = '';
+
+    // DM Button
+    const dmBtn = document.createElement('div');
+    dmBtn.className = 'guild-icon active';
+    dmBtn.innerText = 'DM';
+    dmBtn.onclick = () => {
+      setActiveGuildIcon(dmBtn);
+      loadDMs();
+    };
+    guildList.appendChild(dmBtn);
+
+    // Load DMs by default
+    loadDMs();
+
+    // Load Servers
+    const guilds = await discordApi('GET', '/users/@me/guilds');
+    guilds.forEach(g => {
+      const el = document.createElement('div');
+      el.className = 'guild-icon';
+      el.title = g.name;
+      if (g.icon) {
+        el.innerHTML = `<img src="https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64" loading="lazy">`;
+      } else {
+        el.innerText = g.name.substring(0, 3);
+      }
+      el.onclick = () => {
+        setActiveGuildIcon(el);
+        loadGuildChannels(g.id, g.name);
+      };
+      guildList.appendChild(el);
+    });
+  }
+
+  function setActiveGuildIcon(activeEl) {
+    document.querySelectorAll('.guild-icon').forEach(el => el.classList.remove('active'));
+    activeEl.classList.add('active');
+  }
+
+  async function loadDMs() {
+    const list = document.getElementById('channel-list');
+    list.innerHTML = '<div class="channel-header">Direct Messages</div>';
+    const dms = await discordApi('GET', '/users/@me/channels');
+    dms.sort((a, b) => (b.last_message_id || 0) - (a.last_message_id || 0));
+
+    dms.forEach(ch => {
+      const name = ch.name || (ch.recipients && ch.recipients.map(r => r.username).join(', ')) || 'DM';
+      channelCache[ch.id] = name;
+      const item = document.createElement('div');
+      item.className = 'channel-item';
+      item.innerText = '@ ' + name;
+      item.onclick = () => openChannel(ch.id, '@ ' + name, item);
+      list.appendChild(item);
+    });
+  }
+
+  async function loadGuildChannels(guildId, guildName) {
+    const list = document.getElementById('channel-list');
+    list.innerHTML = `<div class="channel-header">${guildName}</div>`;
+    const channels = await discordApi('GET', `/guilds/${guildId}/channels`);
+    
+    // Type 0 = Text channel, Type 5 = Announcement channel
+    const textChannels = channels
+      .filter(c => c.type === 0 || c.type === 5)
+      .sort((a, b) => a.position - b.position);
+
+    textChannels.forEach(ch => {
+      channelCache[ch.id] = `#${ch.name} (${guildName})`;
+      const item = document.createElement('div');
+      item.className = 'channel-item';
+      item.innerText = '# ' + ch.name;
+      item.onclick = () => openChannel(ch.id, '# ' + ch.name, item);
+      list.appendChild(item);
+    });
+  }
+
+  async function openChannel(channelId, displayName, itemEl) {
+    ACTIVE_CHANNEL_ID = channelId;
+    document.getElementById('active-name').innerText = displayName;
+    document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
+    if (itemEl) itemEl.classList.add('active');
+    document.getElementById('drawer').classList.add('closed');
+
+    const msgContainer = document.getElementById('messages');
+    msgContainer.innerHTML = '<div style="color:#949ba4;font-size:13px;">Loading messages...</div>';
+
+    const messages = await discordApi('GET', `/channels/${channelId}/messages?limit=35`);
+    msgContainer.innerHTML = '';
+    messages.reverse().forEach(m => appendMessage(m));
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+  }
+
+  function appendMessage(m) {
+    const msgContainer = document.getElementById('messages');
+    const div = document.createElement('div');
+    div.className = 'msg';
+    const time = new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const author = m.author ? (m.author.global_name || m.author.username) : 'Unknown';
+    
+    let attachHtml = '';
+    if (m.attachments && m.attachments.length > 0) {
+      attachHtml = m.attachments.map(a => `<div class="msg-attachment">[Attachment: ${a.filename}]</div>`).join('');
+    }
+
+    div.innerHTML = `
+      <div class="msg-header">
+        <span class="msg-author">${escapeHtml(author)}</span>
+        <span class="msg-time">${time}</span>
+      </div>
+      <div class="msg-content">${escapeHtml(m.content || '')}</div>
+      ${attachHtml}
+    `;
+    msgContainer.appendChild(div);
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+  }
+
+  async function sendMessage(e) {
+    e.preventDefault();
+    const input = document.getElementById('msg-input');
+    const text = input.value.trim();
+    if (!text || !ACTIVE_CHANNEL_ID) return;
+    input.value = '';
+
+    try {
+      await discordApi('POST', `/channels/${ACTIVE_CHANNEL_ID}/messages`, { content: text });
+    } catch (err) {
+      alert("Failed to send message.");
+    }
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+  }
+
+  // Real-time Gateway WebSocket for instant messages & notifications
+  function connectGateway() {
+    ws = new WebSocket("wss://gateway.discord.gg/?v=10&encoding=json");
+
+    ws.onopen = () => {
+      document.getElementById('status-dot').style.background = '#23a55a';
+    };
+
+    ws.onmessage = (event) => {
+      const payload = JSON.parse(event.data);
+      const { op, d, s, t } = payload;
+      if (s) seq = s;
+
+      // Opcode 10: Hello -> Start Heartbeat & Send Identify
+      if (op === 10) {
+        const interval = d.heartbeat_interval;
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ op: 1, d: seq }));
+          }
+        }, interval);
+
+        ws.send(JSON.stringify({
+          op: 2,
+          d: {
+            token: TOKEN,
+            properties: { os: "Android", browser: "Chrome", device: "Mobile" }
+          }
+        }));
+      }
+
+      // Opcode 0: Dispatch Event
+      if (op === 0 && t === "MESSAGE_CREATE") {
+        // Append to chat if currently viewing this channel
+        if (d.channel_id === ACTIVE_CHANNEL_ID) {
+          appendMessage(d);
+        }
+
+        // Trigger Android notification if message is from someone else
+        if (CURRENT_USER && d.author && d.author.id !== CURRENT_USER.id) {
+          const isDM = !d.guild_id;
+          const isMention = d.mentions && d.mentions.some(u => u.id === CURRENT_USER.id);
+          if (isDM || isMention || d.channel_id !== ACTIVE_CHANNEL_ID) {
+            const sender = d.author.global_name || d.author.username;
+            const loc = channelCache[d.channel_id] || (isDM ? "Direct Message" : "Server");
+            try {
+              AndroidBridge.sendNotification(`${sender} (${loc})`, d.content || "[Attachment]");
+            } catch (e) {}
+          }
+        }
+      }
+    };
+
+    ws.onclose = () => {
+      document.getElementById('status-dot').style.background = '#f23f43';
+      clearInterval(heartbeatTimer);
+      setTimeout(connectGateway, 3000);
     };
   }
-
-  /** Silently gets a new access token using the refresh token, without re-prompting login. */
-  async function refreshAccessToken() {
-    if (!session || !session.refresh_token) return false;
-    const body = new URLSearchParams({
-      client_id: resolveClientId(),
-      grant_type: 'refresh_token',
-      refresh_token: session.refresh_token
-    });
-    const res = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) return false;
-    applyTokenResponse(json);
-    persistSession();
-    return true;
-  }
-
-  // ---------- API ----------
-  async function api(path) {
-    const res = await fetch(API + path, {
-      headers: { Authorization: session.token_type + ' ' + session.access_token }
-    });
-    if (res.status === 401) { const e = new Error('unauthorized'); e.code = 401; throw e; }
-    if (res.status === 429) {
-      const body = await res.json().catch(() => ({}));
-      const e = new Error('Rate limited. Retry in ' + Math.ceil(body.retry_after || 1) + 's.'); e.code = 429; throw e;
-    }
-    if (!res.ok) throw new Error('Discord returned ' + res.status);
-    return res.json();
-  }
-
-  async function loadData(silent) {
-    try {
-      // Proactively refresh slightly before expiry rather than waiting for a 401,
-      // so a refresh-token failure (e.g. it was revoked) surfaces here, in context.
-      if (session && session.expires_at - Date.now() < 60000) {
-        await refreshAccessToken();
-      }
-      const [user, guilds] = await Promise.all([api('/users/@me'), api('/users/@me/guilds')]);
-      session.user = user;
-      session.guilds = guilds;
-      persistSession();
-      render();
-      if (!silent) setStatus('');
-    } catch (err) {
-      if (err.code === 401) {
-        const refreshed = await refreshAccessToken();
-        if (refreshed) { await loadData(silent); return; }
-        logout('Your Discord session is no longer valid. Please log in again.');
-      } else if (silent && session && session.user) {
-        setStatus('Showing saved data. ' + err.message);
-      } else {
-        setStatus(err.message || 'Could not load your Discord data.', 'error');
-      }
-    }
-  }
-
-  // ---------- Render ----------
-  function avatarUrl(u) {
-    if (u.avatar) return `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128`;
-    const idx = Number((BigInt(u.id) >> 22n) % 6n);
-    return `https://cdn.discordapp.com/embed/avatars/${idx}.png`;
-  }
-  function render() {
-    const signedIn = !!(session && session.user);
-    $('loginView').hidden = signedIn;
-    $('appView').hidden = !signedIn;
-    if (!signedIn) return;
-
-    const u = session.user;
-    $('avatar').src = avatarUrl(u);
-    $('userName').textContent = u.global_name || u.username;
-    $('userId').textContent = '@' + u.username;
-
-    const list = $('guilds');
-    list.replaceChildren();
-    const guilds = session.guilds || [];
-    $('guildCount').textContent = '(' + guilds.length + ')';
-    for (const g of guilds) {
-      const li = document.createElement('li');
-      let icon;
-      if (g.icon) {
-        icon = document.createElement('img');
-        icon.src = `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64`;
-        icon.alt = '';
-        icon.loading = 'lazy';
-      } else {
-        icon = document.createElement('div');
-        icon.textContent = g.name.split(/\s+/).map(w => w[0]).join('').slice(0, 3);
-      }
-      icon.className = 'gicon';
-      const name = document.createElement('span');
-      name.className = 'gname';
-      name.textContent = g.name;
-      li.append(icon, name);
-      if (g.owner) {
-        const b = document.createElement('span');
-        b.className = 'badge';
-        b.textContent = 'Owner';
-        li.append(b);
-      }
-      list.append(li);
-    }
-    updateExpiry();
-  }
-
-  function updateExpiry() {
-    if (!session) return;
-    const ms = session.expires_at - Date.now();
-    if (ms <= 0) {
-      // Don't log out on a bare timer tick — try a silent refresh first and
-      // only give up if Discord actually rejects it.
-      refreshAccessToken().then(ok => {
-        if (ok) { persistSession(); updateExpiry(); }
-        else logout('Your session has expired. Please log in again.');
-      });
-      return;
-    }
-    const mins = Math.floor(ms / 60000), hrs = Math.floor(mins / 60), days = Math.floor(hrs / 24);
-    $('expiry').textContent = 'Session expires in ' +
-      (days >= 1 ? days + (days === 1 ? ' day' : ' days') : hrs >= 1 ? hrs + ' h' : Math.max(mins, 1) + ' min');
-  }
-
-  // ---------- Logout ----------
-  function logout(message) {
-    session = null;
-    store.del(K.session);
-    store.del(K.pkce);
-    render();
-    setStatus(message || '', message ? 'error' : '');
-  }
-
-  // ---------- Init ----------
-  function restoreSession() {
-    if (!keepOn()) return false;
-    const saved = store.getJSON(K.session);
-    if (!saved || !saved.access_token) return false;
-    if (!saved.expires_at || saved.expires_at <= Date.now()) {
-      if (!saved.refresh_token) {
-        store.del(K.session);
-        setStatus('Your saved session expired. Please log in again.');
-        return false;
-      }
-      // Access token expired but we have a refresh token — loadData() below
-      // refreshes before calling the API, so this still recovers silently.
-    }
-    session = saved;
-    if (session.user) render();
-    loadData(true);          // refresh in the background; shows saved data meanwhile
-    return true;
-  }
-
-  function init() {
-    const keep = keepOn();
-    $('keepLoggedIn').checked = $('keepLoggedIn2').checked = keep;
-
-    $('loginBtn').addEventListener('click', login);
-    $('logoutBtn').addEventListener('click', () => logout());
-    $('refreshBtn').addEventListener('click', () => { setStatus('Refreshing\u2026'); loadData(); });
-    $('keepLoggedIn').addEventListener('change', e => setKeep(e.target.checked));
-    $('keepLoggedIn2').addEventListener('change', e => setKeep(e.target.checked));
-    setInterval(updateExpiry, 30000);
-
-    // Plain browser flow: token arrives in this page's own URL fragment
-    if (/[#&]access_token=|[#&]error=/.test(location.hash)) {
-      const hash = location.hash;
-      history.replaceState(null, '', location.pathname + location.search);
-      window.handleOAuthCallback(hash);
-      return;
-    }
-    restoreSession();
-  }
-
-  init();
-})();
 </script>
 </body>
 </html>
