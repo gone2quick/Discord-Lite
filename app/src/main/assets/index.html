@@ -12,7 +12,7 @@
   #login-screen { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; padding: 20px; background: #1e1f22; }
   #login-screen h2 { color: #fff; margin-bottom: 8px; }
   #login-screen p { color: #949ba4; font-size: 13px; margin-bottom: 16px; text-align: center; }
-  #token-input { width: 100%; max-width: 340px; padding: 12px; border-radius: 6px; border: 1px solid #111214; background: #313338; color: #fff; margin-bottom: 12px; font-size: 14px; }
+  #token-input { width: 100%; max-width: 340px; padding: 12px; border-radius: 6px; border: 1px solid #111214; background: #313338; color: #fff; margin-bottom: 12px; font-size: 14px; outline: none; }
   .btn { background: #5865f2; color: #fff; border: none; padding: 12px 20px; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer; width: 100%; max-width: 340px; }
   .btn:active { background: #4752c4; }
 
@@ -20,9 +20,9 @@
   #app { display: none; height: 100%; flex-direction: column; }
   #topbar { height: 48px; background: #2b2d31; border-bottom: 1px solid #1f2023; display: flex; align-items: center; padding: 0 12px; justify-content: space-between; flex-shrink: 0; }
   #menu-btn { background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 4px 8px; }
-  #channel-title { font-weight: 700; color: #fff; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 65%; }
-  #status-dot { width: 10px; height: 10px; border-radius: 50%; background: #f23f43; display: inline-block; margin-right: 6px; }
-  #logout-btn { background: #da373c; border: none; color: #fff; font-size: 11px; padding: 5px 8px; border-radius: 4px; }
+  #channel-title { font-weight: 700; color: #fff; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 65%; display: flex; align-items: center; }
+  #status-dot { width: 10px; height: 10px; border-radius: 50%; background: #f23f43; display: inline-block; margin-right: 6px; flex-shrink: 0; }
+  #logout-btn { background: #da373c; border: none; color: #fff; font-size: 11px; padding: 5px 8px; border-radius: 4px; cursor: pointer; }
 
   #workspace { display: flex; flex: 1; overflow: hidden; position: relative; }
   
@@ -52,7 +52,8 @@
   /* Input Bar */
   #input-bar { display: flex; padding: 8px; background: #2b2d31; gap: 8px; flex-shrink: 0; }
   #msg-input { flex: 1; background: #383a40; border: none; border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 14px; outline: none; }
-  #send-btn { background: #5865f2; border: none; color: #fff; border-radius: 8px; padding: 0 16px; font-weight: 600; font-size: 14px; }
+  #send-btn { background: #5865f2; border: none; color: #fff; border-radius: 8px; padding: 0 16px; font-weight: 600; font-size: 14px; cursor: pointer; }
+  #send-btn:active { background: #4752c4; }
 </style>
 </head>
 <body>
@@ -328,13 +329,14 @@
           appendMessage(d);
         }
 
-        // Trigger Android notification if message is from someone else
+        // TRIGGER NOTIFICATIONS ONLY FOR DMs OR DIRECT MENTIONS (SERVER MESSAGES MUTED)
         if (CURRENT_USER && d.author && d.author.id !== CURRENT_USER.id) {
           const isDM = !d.guild_id;
           const isMention = d.mentions && d.mentions.some(u => u.id === CURRENT_USER.id);
-          if (isDM || isMention || d.channel_id !== ACTIVE_CHANNEL_ID) {
+
+          if (isDM || isMention) {
             const sender = d.author.global_name || d.author.username;
-            const loc = channelCache[d.channel_id] || (isDM ? "Direct Message" : "Server");
+            const loc = isDM ? "Direct Message" : "Mentioned in Server";
             try {
               AndroidBridge.sendNotification(`${sender} (${loc})`, d.content || "[Attachment]");
             } catch (e) {}
