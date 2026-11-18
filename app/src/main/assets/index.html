@@ -54,6 +54,17 @@
   #msg-input { flex: 1; background: #383a40; border: none; border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 14px; outline: none; }
   #send-btn { background: #5865f2; border: none; color: #fff; border-radius: 8px; padding: 0 16px; font-weight: 600; font-size: 14px; cursor: pointer; }
   #send-btn:active { background: #4752c4; }
+
+  /* Notification settings panel */
+  #notif-btn { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; padding: 4px 8px; }
+  #notif-panel { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #313338; z-index: 30; overflow-y: auto; padding: 12px; }
+  #notif-panel.open { display: block; }
+  #notif-panel h3 { color: #fff; font-size: 16px; margin: 4px 0 4px; }
+  #notif-panel p.hint { color: #949ba4; font-size: 12px; margin: 0 0 12px; }
+  .notif-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 8px; border-bottom: 1px solid #3f4248; }
+  .notif-row span { color: #dbdee1; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .notif-row select { background: #1e1f22; color: #fff; border: 1px solid #3f4248; border-radius: 4px; padding: 6px; font-size: 13px; flex-shrink: 0; max-width: 55%; }
+  .notif-sub { font-size: 11px; font-weight: 700; color: #949ba4; text-transform: uppercase; margin: 16px 8px 4px; }
 </style>
 </head>
 <body>
@@ -67,12 +78,16 @@
 
 <div id="app">
   <div id="topbar">
-    <button id="menu-btn" onclick="toggleDrawer()">☰</button>
+    <div style="display:flex;align-items:center;">
+      <button id="menu-btn" onclick="toggleDrawer()">☰</button>
+      <button id="notif-btn" onclick="toggleNotifPanel()" aria-label="Notification settings">🔔</button>
+    </div>
     <div id="channel-title"><span id="status-dot"></span><span id="active-name">Select Channel</span></div>
     <button id="logout-btn" onclick="logout()">Logout</button>
   </div>
 
   <div id="workspace">
+    <div id="notif-panel"></div>
     <div id="drawer">
       <div id="guild-list"></div>
       <div id="channel-list"></div>
@@ -96,6 +111,7 @@
   let heartbeatTimer = null;
   let seq = null;
   let channelCache = {};
+  let GUILDS = [];
 
   if (TOKEN) {
     initApp();
@@ -116,6 +132,7 @@
   }
 
   function toggleDrawer() {
+    document.getElementById('notif-panel').classList.remove('open');
     document.getElementById('drawer').classList.toggle('closed');
   }
 
@@ -173,6 +190,7 @@
 
     // Load Servers
     const guilds = await discordApi('GET', '/users/@me/guilds');
+    GUILDS = guilds;
     guilds.forEach(g => {
       const el = document.createElement('div');
       el.className = 'guild-icon';
@@ -290,6 +308,121 @@
     return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
   }
 
+  // ---- Notification settings (per server) ----
+  const GUILD_DEFAULT = 'mentions';
+  let NOTIF = loadNotifSettings();
+
+  function loadNotifSettings() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('notif_settings') || '{}');
+      return {
+        dms: saved.dms || 'all',
+        calls: saved.calls || 'on',
+        guilds: saved.guilds && typeof saved.guilds === 'object' ? saved.guilds : {}
+      };
+    } catch (e) {
+      return { dms: 'all', calls: 'on', guilds: {} };
+    }
+  }
+
+  function saveNotifSettings() {
+    try { localStorage.setItem('notif_settings', JSON.stringify(NOTIF)); } catch (e) {}
+  }
+
+  function toggleNotifPanel() {
+    const panel = document.getElementById('notif-panel');
+    if (panel.classList.contains('open')) {
+      panel.classList.remove('open');
+    } else {
+      renderNotifPanel();
+      panel.classList.add('open');
+    }
+  }
+
+  function makeNotifRow(label, options, value, onChange) {
+    const row = document.createElement('div');
+    row.className = 'notif-row';
+    const name = document.createElement('span');
+    name.textContent = label;
+    const sel = document.createElement('select');
+    options.forEach(([val, text]) => {
+      const o = document.createElement('option');
+      o.value = val;
+      o.textContent = text;
+      if (val === value) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.onchange = () => { onChange(sel.value); saveNotifSettings(); };
+    row.appendChild(name);
+    row.appendChild(sel);
+    return row;
+  }
+
+  function renderNotifPanel() {
+    const panel = document.getElementById('notif-panel');
+    panel.textContent = '';
+
+    const h = document.createElement('h3');
+    h.textContent = 'Notifications';
+    const hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = 'Choose what notifies you. Notifications only arrive while the app is open. Tap the bell again to close.';
+    panel.appendChild(h);
+    panel.appendChild(hint);
+
+    const general = document.createElement('div');
+    general.className = 'notif-sub';
+    general.textContent = 'General';
+    panel.appendChild(general);
+    panel.appendChild(makeNotifRow('Direct messages',
+      [['all', 'All messages'], ['off', 'Nothing']], NOTIF.dms, v => { NOTIF.dms = v; }));
+    panel.appendChild(makeNotifRow('Incoming calls',
+      [['on', 'Notify'], ['off', 'Nothing']], NOTIF.calls, v => { NOTIF.calls = v; }));
+
+    const servers = document.createElement('div');
+    servers.className = 'notif-sub';
+    servers.textContent = 'Servers';
+    panel.appendChild(servers);
+
+    if (!GUILDS.length) {
+      const none = document.createElement('p');
+      none.className = 'hint';
+      none.style.margin = '8px';
+      none.textContent = 'No servers loaded yet.';
+      panel.appendChild(none);
+    }
+    GUILDS.forEach(g => {
+      panel.appendChild(makeNotifRow(g.name,
+        [['all', 'All messages'], ['mentions', 'Only @mentions'], ['off', 'Nothing']],
+        NOTIF.guilds[g.id] || GUILD_DEFAULT,
+        v => { NOTIF.guilds[g.id] = v; }));
+    });
+  }
+
+  function shouldNotifyMessage(d) {
+    if (!d.guild_id) return NOTIF.dms === 'all';
+    const mode = NOTIF.guilds[d.guild_id] || GUILD_DEFAULT;
+    if (mode === 'off') return false;
+    if (mode === 'all') return true;
+    return !!(d.mentions && d.mentions.some(u => u.id === CURRENT_USER.id));
+  }
+
+  // Incoming call notification (tap opens the official Discord app)
+  async function handleIncomingCall(d) {
+    try {
+      if (!CURRENT_USER || !d || !d.channel_id || NOTIF.calls === 'off') return;
+      if (!Array.isArray(d.ringing) || !d.ringing.includes(CURRENT_USER.id)) return;
+      let caller = "Someone";
+      try {
+        const ch = await discordApi("GET", "/channels/" + d.channel_id);
+        const others = (ch.recipients || []).filter(u => u.id !== CURRENT_USER.id);
+        if (ch.name) caller = ch.name;
+        else if (others.length) caller = others.map(u => u.global_name || u.username).join(", ");
+      } catch (e) {}
+      AndroidBridge.sendCallNotification("Incoming call", caller + " is calling you", String(d.channel_id));
+    } catch (e) {}
+  }
+
   // Real-time Gateway WebSocket for instant messages & notifications
   function connectGateway() {
     ws = new WebSocket("wss://gateway.discord.gg/?v=10&encoding=json");
@@ -322,6 +455,11 @@
         }));
       }
 
+      // Incoming call: notify only if this account is being rung
+      if (op === 0 && t === "CALL_CREATE") {
+        handleIncomingCall(d);
+      }
+
       // Opcode 0: Dispatch Event
       if (op === 0 && t === "MESSAGE_CREATE") {
         // Append to chat if currently viewing this channel
@@ -334,9 +472,11 @@
           const isDM = !d.guild_id;
           const isMention = d.mentions && d.mentions.some(u => u.id === CURRENT_USER.id);
 
-          if (isDM || isMention) {
+          if (shouldNotifyMessage(d)) {
             const sender = d.author.global_name || d.author.username;
-            const loc = isDM ? "Direct Message" : "Mentioned in Server";
+            const g = GUILDS.find(x => x.id === d.guild_id);
+            const gName = g ? g.name : "Server";
+            const loc = isDM ? "Direct Message" : (isMention ? "Mentioned in " + gName : gName);
             try {
               AndroidBridge.sendNotification(`${sender} (${loc})`, d.content || "[Attachment]");
             } catch (e) {}
