@@ -4,12 +4,18 @@ import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import org.json.JSONObject
 import androidx.core.app.NotificationCompat
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -20,6 +26,9 @@ import java.net.URL
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+
+    private val notificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* result not needed */ }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,6 +46,29 @@ class MainActivity : AppCompatActivity() {
         }
 
         setContentView(webView)
+
+        requestNotificationPermissionIfNeeded()
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                // Close the drawer if it's open; otherwise let back leave the app.
+                val js = "(function(){var d=document.getElementById('drawer');" +
+                    "if(d && !d.classList.contains('closed')){d.classList.add('closed');return true;}" +
+                    "return false;})()"
+                webView.evaluateJavascript(js) { result ->
+                    if (result != "true") finish()
+                }
+            }
+        })
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     class DiscordBridge(private val context: Context) {
@@ -65,25 +97,32 @@ class MainActivity : AppCompatActivity() {
 
                 val code = conn.responseCode
                 val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-                val responseText = BufferedReader(InputStreamReader(stream)).use { it.readText() }
+                val responseText = stream?.let {
+                    BufferedReader(InputStreamReader(it)).use { r -> r.readText() }
+                } ?: ""
 
                 if (code !in 200..299) {
-                    """{"error": "HTTP $code", "details": ${JSONObjectQuote(responseText)}}"""
+                    errorJson("HTTP $code", responseText)
                 } else {
                     responseText.ifEmpty { "{}" }
                 }
             } catch (e: Exception) {
-                """{"error": "${e.message?.replace("\"", "'")}"}"""
+                errorJson(e.message ?: e.javaClass.simpleName, null)
             }
         }
 
-        private fun JSONObjectQuote(text: String): String {
-            val safe = text.replace("\"", "\\\"").replace("\n", " ")
-            return "\"$safe\""
+        private fun errorJson(error: String, details: String?): String {
+            val obj = JSONObject().put("error", error)
+            if (details != null) obj.put("details", details)
+            return obj.toString()
         }
 
         @JavascriptInterface
         fun sendNotification(title: String, message: String) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+            ) return
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val channelId = "litecord_messages"
 
@@ -109,11 +148,5 @@ class MainActivity : AppCompatActivity() {
 
             notificationManager.notify((System.currentTimeMillis() % 100000).toInt(), notification)
         }
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        val drawerJs = "if(typeof toggleDrawer === 'function') { toggleDrawer(); } else { document.getElementById('drawer').classList.toggle('closed'); }"
-        webView.evaluateJavascript(drawerJs, null)
     }
 }
