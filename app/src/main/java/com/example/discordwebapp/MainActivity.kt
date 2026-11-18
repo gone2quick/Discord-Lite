@@ -3,7 +3,10 @@ package com.example.discordwebapp
 import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -52,7 +55,9 @@ class MainActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 // Close the drawer if it's open; otherwise let back leave the app.
-                val js = "(function(){var d=document.getElementById('drawer');" +
+                val js = "(function(){var n=document.getElementById('notif-panel');" +
+                    "if(n && n.classList.contains('open')){n.classList.remove('open');return true;}" +
+                    "var d=document.getElementById('drawer');" +
                     "if(d && !d.classList.contains('closed')){d.classList.add('closed');return true;}" +
                     "return false;})()"
                 webView.evaluateJavascript(js) { result ->
@@ -147,6 +152,48 @@ class MainActivity : AppCompatActivity() {
                 .build()
 
             notificationManager.notify((System.currentTimeMillis() % 100000).toInt(), notification)
+        }
+
+        @JavascriptInterface
+        fun sendCallNotification(title: String, message: String, channelId: String) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+            ) return
+            // Channel ids are numeric snowflakes; reject anything else.
+            if (!channelId.matches(Regex("\\d{5,25}"))) return
+
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val chId = "litecord_calls"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(chId, "LiteCord Calls", NotificationManager.IMPORTANCE_HIGH)
+                    .apply {
+                        description = "Incoming Discord calls"
+                        enableVibration(true)
+                    }
+                nm.createNotificationChannel(channel)
+            }
+
+            // Opens the official Discord app if it handles this link, otherwise the browser.
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://discord.com/channels/@me/$channelId"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val pending = PendingIntent.getActivity(
+                context, channelId.hashCode(), intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val notification = NotificationCompat.Builder(context, chId)
+                .setSmallIcon(android.R.drawable.ic_menu_call)
+                .setContentTitle(title)
+                .setContentText(message)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setContentIntent(pending)
+                .setAutoCancel(true)
+                .setTimeoutAfter(45_000)
+                .build()
+
+            nm.notify(channelId.hashCode(), notification)
         }
     }
 }
